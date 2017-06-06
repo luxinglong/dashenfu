@@ -1,8 +1,10 @@
 #include "ImageConsProd.hpp"
+#include "RMVideoCapture.hpp"
 
 #include <unistd.h>
 
 using namespace std;
+using namespace cv;
 
 #define BUFFER_SIZE 3
 
@@ -17,18 +19,24 @@ struct ImageData{
 
 ImageData data[BUFFER_SIZE];
 
-#define USE_VIDEO
+//#define USE_VIDEO
 
 void ImageConsProd::ImageProducer(){
 #ifdef USE_VIDEO
-	String video_path = "/home/luban-master/Desktop/WorkSpace/dashenfu_v4/data/4.MP4";
+	string video_path = "/home/luban-master/Desktop/WorkSpace/dashenfu/data/4.MP4";
 	VideoCapture cap(video_path);
 	if (!cap.isOpened())
-			return -1;
+			cout << "Can not open the video file!" << endl;
 #else
-	VideoCapture cap("/dev/video0");
-	if (!cap.isOpened())
-			return -1;
+	RMVideoCapture cap("/dev/video0", 3);
+	cap.setVideoFormat(640, 480, 1);
+	cap.setExposureTime(0,85);
+	cap.startStream();
+	cap.info();
+
+	//VideoCapture cap(0);
+	//if (!cap.isOpened())
+			//cout << "Can not open the camera!" << endl;
 #endif
 	
 	while(1){
@@ -50,10 +58,10 @@ void ImageConsProd::ImageConsumer(){
 		frame_num = data[csmIdx % BUFFER_SIZE].frame;
 		++csmIdx;
 		// sleep(); // int seconds
-		usleep(200000); // int micro-seconds
+		usleep(120000); // int micro-seconds
 		Mat src_show = src;
 		imshow("result", src_show);
-		waitKey(0);
+		waitKey(1);
 
 	}
 }

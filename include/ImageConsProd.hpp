@@ -5,7 +5,7 @@
 class ImageConsProd{
 public:
 	//ImageConsProd(Settings * _settings,){}
-	ImageConsProd();
+	ImageConsProd(){}
 	void ImageProducer();
 	void ImageConsumer();		
 

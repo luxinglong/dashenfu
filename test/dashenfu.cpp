@@ -1,6 +1,6 @@
 #include "ImageConsProd.hpp"
 
-#include <thread.h>
+#include <thread>
 
 int main(int argc, char** argv)
 {
