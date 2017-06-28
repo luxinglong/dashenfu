@@ -1,5 +1,7 @@
 #include "ImageConsProd.hpp"
 #include "RMVideoCapture.hpp"
+#include "ShenfuDetector.hpp"
+#include "LedDebugger.hpp"
 
 #include <unistd.h>
 
@@ -29,8 +31,8 @@ void ImageConsProd::ImageProducer(){
 			cout << "Can not open the video file!" << endl;
 #else
 	RMVideoCapture cap("/dev/video0", 3);
-	cap.setVideoFormat(640, 480, 1);
-	cap.setExposureTime(0,85);
+	cap.setVideoFormat(640, 480, 0);
+	cap.setExposureTime(0,79);
 	cap.startStream();
 	cap.info();
 
@@ -50,6 +52,13 @@ void ImageConsProd::ImageProducer(){
 
 void ImageConsProd::ImageConsumer(){
 	
+	ShenfuDetector shenfu_detector;
+	shenfu_detector.loadModel();
+
+	// vars for debug use
+	//LedDebugger led("/sys/class/gpio/gpio158/value");
+	//led.ledON();
+
 	Mat src;
 	int frame_num = 0;
 	while(1){
@@ -58,10 +67,13 @@ void ImageConsProd::ImageConsumer(){
 		frame_num = data[csmIdx % BUFFER_SIZE].frame;
 		++csmIdx;
 		// sleep(); // int seconds
-		usleep(120000); // int micro-seconds
-		Mat src_show = src;
-		imshow("result", src_show);
-		waitKey(1);
+		//usleep(120000); // int micro-seconds
 
+		if(src.rows != 480)
+			continue;
+		
+		pair<int, int> res = shenfu_detector.getTarget(src);
+		if (waitKey(1)>=0)
+			break;
 	}
 }
