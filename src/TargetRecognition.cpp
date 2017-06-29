@@ -9,16 +9,22 @@ int TargetRecognition::recognizeHWDigit(const cv::Mat & image){
 		return -1;
 	}
 	
+	Mat gray;
+	if(image.channels() != 1)
+		cvtColor(image, gray, CV_RGB2GRAY);
+	else
+		image.copyTo(gray);	
+	
 	// preprocessing the input image
 	Mat digitNorm;
-	if(image.rows != 28 && image.cols != 28)
-		resize(image, digitNorm, Size(28, 28));
+	if(gray.rows != 28 && gray.cols != 28)
+		resize(gray, digitNorm, Size(28, 28));
 	else
-		image.copyTo(digitNorm);
+		gray.copyTo(digitNorm);
 	
 	// TODO: InvMat shoud be cut to reduce the computation cost
 
-	threshold(digitNorm,digitNorm,95,255,THRESH_BINARY);
+	threshold(digitNorm,digitNorm,150,255,THRESH_BINARY);
 
 	Mat resultMat = Mat::zeros(1, 1, CV_32FC1);
 	Mat featureMat = Mat::zeros(1, 324, CV_32FC1);
@@ -44,13 +50,21 @@ int TargetRecognition::recognizeLEDDigit(const cv::Mat & image){
 		cout << "The handwritten digit image isn't valid." << endl;
 		return -1;
 	}
+
+	Mat gray;
+	if(image.channels() != 1)
+		cvtColor(image, gray, CV_RGB2GRAY);
+	else
+		image.copyTo(gray);	
 	
 	// preprocessing the input image
 	Mat led_img;
-	if (image.rows!=112 || image.cols!=56)
-		resize(image,led_img,Size(56,112));
+	if (gray.rows!=112 || gray.cols!=56)
+		resize(gray,led_img,Size(56,112));
 	else
-		image.copyTo(led_img);
+		gray.copyTo(led_img);
+
+	threshold(led_img,led_img,150,255,THRESH_BINARY);
 
 	int database[10][7]={{2,2,2,2,2,2,0}, // 0
 						 {0,2,2,0,0,0,0}, // 1
