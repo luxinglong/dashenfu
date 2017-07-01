@@ -51,10 +51,11 @@ pair<int, int> ShenfuDetector::getTarget(const cv::Mat & image){
 			for (int j = 0; j < 4; j++)
 				line(sudoku_show, vertices[j], vertices[(j+1)%4], Scalar(0,255,0),2);
 		}
-		getLedRects(sudoku_show);
+		//getLedRects(sudoku_show);
 		imshow("sudoku",sudoku_show);
 
-		cout << "target: "  << idx.second << endl;
+		cout << "target1: " << idx.second << endl;
+		cout << "target2: " << idx.first << endl;
 
 		return idx;
 	}
@@ -159,8 +160,10 @@ pair<int, int> ShenfuDetector::chooseTarget(const Mat & image,const vector<Rotat
 			size_t idx = i * 3 + j;
 			Rect cell_roi = sudoku_rects[centers[idx].idx].boundingRect();
 			int margin_x = 0.05*cell_roi.width;
-			int margin_y = 0.05*cell_roi.height;
+			int margin_y = 0.1*cell_roi.height;
 			Rect scale_roi = Rect(cell_roi.x + margin_x, cell_roi.y + margin_y, cell_roi.width - 2*margin_x, cell_roi.height - 2*margin_y);
+			if(scale_roi.x<0 || scale_roi.y<0 || scale_roi.width<0 || scale_roi.height<0 || scale_roi.x + scale_roi.width > image.cols || scale_roi.y + scale_roi.height > image.rows)
+				return make_pair(-1, -1);
 			image(scale_roi).copyTo(cell[idx]);
 		}
 	}
@@ -172,12 +175,19 @@ pair<int, int> ShenfuDetector::chooseTarget(const Mat & image,const vector<Rotat
 	sudoku_rects[centers[2].idx].points(vertices2);
 	pt[1] = vertices2[2];
 
-	sudoku_real_width = sudoku_rects[centers[0].idx].size.width;
-	sudoku_real_height = sudoku_rects[centers[0].idx].size.height;
+	int width, height;
+	for (int i=0; i<9; i++){
+		width += sudoku_rects[centers[i].idx].size.width;
+		height += sudoku_rects[centers[i].idx].size.height;
+	}
+	sudoku_real_width = (int)width/9;
+	sudoku_real_height = (int)height/9;
 
 	int idx = -1;
-	idx = findTargetCanny(cell);
-	getSudokuResults(cell);
+	Mat led_image;
+	image.copyTo(led_image);
+	//idx = findTargetCanny(cell);
+	idx =findTargetDigit(cell, led_image);
 
 #ifdef SHOW_IMAGE	
 	for(int i=0; i<9; i++){
@@ -190,7 +200,12 @@ pair<int, int> ShenfuDetector::chooseTarget(const Mat & image,const vector<Rotat
 	
 		// TODO: InvMat shoud be cut to reduce the computation cost
 
-		threshold(digitNorm,digitNorm,150,255,THRESH_BINARY);
+		threshold(digitNorm,digitNorm,160,255,THRESH_BINARY);
+
+		//Mat element = getStructuringElement(MORPH_RECT, Size(3, 3));
+		//erode(digitNorm, digitNorm, element);
+		//dilate(digitNorm, digitNorm, element);
+
 		stringstream stream;
 		string str;
 		stream << cur_sudoku_results[i];
@@ -242,17 +257,17 @@ int ShenfuDetector::findTargetCanny(cv::Mat * cells){
 	return min_count_idx;	
 }
 
-int ShenfuDetector::findTargetDigit(cv::Mat * sudoku_cells, cv::Mat * led_cells){
+int ShenfuDetector::findTargetDigit(cv::Mat * sudoku_cells, cv::Mat & image){
+	
+	getSudokuResults(sudoku_cells);
+	getLedRects(image);
+
 	if(!is_init){
-		init(sudoku_cells, led_cells);
+		init();
 		return -1;
 	}
 
 	int recognition_idx = -1;
-
-	getSudokuResults(sudoku_cells);
-	getLedResults(led_cells);
-
 	updateHitBit();
 
 	for(size_t i=0; i<9; i++){
@@ -263,13 +278,16 @@ int ShenfuDetector::findTargetDigit(cv::Mat * sudoku_cells, cv::Mat * led_cells)
 	return recognition_idx;
 }
 
-bool ShenfuDetector::init(cv::Mat * sudoku_cells, cv::Mat * led_cells){
-	if(is_init)
+bool ShenfuDetector::init(){
+	if (is_init)
 		return true;
 
-	for(size_t i=0; i<9; i++){
-		last_sudoku_results[i] = recognition.recognizeHWDigit(sudoku_cells[i]);
-		last_led_results[i] = recognition.recognizeLEDDigit(led_cells[i]);
+	for (size_t i=0; i<9; i++){
+		last_sudoku_results[i] = cur_sudoku_results[i];
+	}
+
+	for (size_t i=0; i<5; i++){
+		last_led_results[i] = cur_led_results[i];
 	}
 
 	is_init = true;
@@ -332,19 +350,20 @@ bool ShenfuDetector::matchArray(const int * array1, const int * array2, int leng
 }
 
 bool ShenfuDetector::getLedRects(cv::Mat & frame){
-	Point2f pt1(pt[0].x + 0.9*sudoku_real_width, pt[0].y - 1.3*sudoku_real_height);
-	Point2f	pt2(pt[1].x - 0.9*sudoku_real_width, pt[1].y - 1.3*sudoku_real_height);
-	Point2f pt3(pt[1].x - 0.9*sudoku_real_width, pt[1].y - 0.4*sudoku_real_height);
-	Point2f pt4(pt[0].x + 0.9*sudoku_real_width, pt[0].y - 0.4*sudoku_real_height);
+	Point2f pt1(pt[0].x + 0.85*sudoku_real_width, pt[0].y - 1.25*sudoku_real_height);
+	Point2f	pt2(pt[1].x - 0.8*sudoku_real_width, pt[1].y - 1.25*sudoku_real_height);
+	Point2f pt3(pt[1].x - 0.8*sudoku_real_width, pt[1].y - 0.45*sudoku_real_height);
+	Point2f pt4(pt[0].x + 0.85*sudoku_real_width, pt[0].y - 0.45*sudoku_real_height);
 
 	float singleShuamguanW=(pt2.x-pt1.x)/5;
+	std::vector<cv::Rect> led_rects;
 
 #ifdef SHOW_IMAGE	
 	// draw the big rectangle cover all shumaguan numbers
-	line(frame,pt1,pt2,Scalar(0,255,0),2);
+	/*line(frame,pt1,pt2,Scalar(0,255,0),2);
 	line(frame,pt2,pt3,Scalar(0,255,0),2);
 	line(frame,pt3,pt4,Scalar(0,255,0),2);
-	line(frame,pt4,pt1,Scalar(0,255,0),2);
+	line(frame,pt4,pt1,Scalar(0,255,0),2);*/
 #endif
 	
 	if (pt2.y-pt1.y<5 && pt2.y-pt1.y>-5){
@@ -354,23 +373,29 @@ bool ShenfuDetector::getLedRects(cv::Mat & frame){
 		led_rects.push_back(Rect(Point2f(pt1.x+3*singleShuamguanW,pt1.y), Point2f(pt4.x+4*singleShuamguanW,pt4.y)));//(Rect(pt1.x+3*singleShuamguanW,pt1.y,singleShuamguanW,pt4.y-pt1.y));
 		led_rects.push_back(Rect(Point2f(pt1.x+4*singleShuamguanW,pt1.y), pt3));//(Rect(pt1.x+4*singleShuamguanW,pt1.y,singleShuamguanW,pt4.y-pt1.y));
 #ifdef SHOW_IMAGE				
-		line(frame,Point2f(pt1.x+singleShuamguanW,pt1.y),Point2f(pt4.x+singleShuamguanW,pt4.y),Scalar(0,0,255),2);
+		/*line(frame,Point2f(pt1.x+singleShuamguanW,pt1.y),Point2f(pt4.x+singleShuamguanW,pt4.y),Scalar(0,0,255),2);
 		line(frame,Point2f(pt1.x+2*singleShuamguanW,pt1.y),Point2f(pt4.x+2*singleShuamguanW,pt4.y),Scalar(0,0,255),2);
 		line(frame,Point2f(pt1.x+3*singleShuamguanW,pt1.y),Point2f(pt4.x+3*singleShuamguanW,pt4.y),Scalar(0,0,255),2);
-		line(frame,Point2f(pt1.x+4*singleShuamguanW,pt1.y),Point2f(pt4.x+4*singleShuamguanW,pt4.y),Scalar(0,0,255),2);
+		line(frame,Point2f(pt1.x+4*singleShuamguanW,pt1.y),Point2f(pt4.x+4*singleShuamguanW,pt4.y),Scalar(0,0,255),2);*/
 #endif
 	}
 	else{
-		led_rects.push_back(Rect(pt1.x,pt1.y,singleShuamguanW,pt4.y-pt1.y));
+		led_rects.push_back(Rect(pt1, Point2f(pt4.x+singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+singleShuamguanW-pt3.x)+pt3.y)));
+		led_rects.push_back(Rect(Point2f(pt1.x+singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+singleShuamguanW-pt2.x)+pt2.y), Point2f(pt4.x+2*singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+2*singleShuamguanW-pt3.x)+pt3.y)));
+		led_rects.push_back(Rect(Point2f(pt1.x+2*singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+2*singleShuamguanW-pt2.x)+pt2.y), Point2f(pt4.x+3*singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+3*singleShuamguanW-pt3.x)+pt3.y)));
+		led_rects.push_back(Rect(Point2f(pt1.x+3*singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+3*singleShuamguanW-pt2.x)+pt2.y), Point2f(pt4.x+4*singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+4*singleShuamguanW-pt3.x)+pt3.y)));
+		led_rects.push_back(Rect(Point2f(pt1.x+4*singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+4*singleShuamguanW-pt2.x)+pt2.y), pt3));
+
+		/*led_rects.push_back(Rect(pt1.x,pt1.y,singleShuamguanW,pt4.y-pt1.y));
 		led_rects.push_back(Rect(pt1.x+singleShuamguanW,(int)((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+singleShuamguanW-pt2.x)+pt2.y,singleShuamguanW,pt4.y-pt1.y));
 		led_rects.push_back(Rect(pt1.x+2*singleShuamguanW,(int)((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+2*singleShuamguanW-pt2.x)+pt2.y,singleShuamguanW,pt4.y-pt1.y));
 		led_rects.push_back(Rect(pt1.x+3*singleShuamguanW,(int)((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+3*singleShuamguanW-pt2.x)+pt2.y,singleShuamguanW,pt4.y-pt1.y));
-		led_rects.push_back(Rect(pt1.x+4*singleShuamguanW,(int)((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+4*singleShuamguanW-pt2.x)+pt2.y,singleShuamguanW,pt4.y-pt1.y));
+		led_rects.push_back(Rect(pt1.x+4*singleShuamguanW,(int)((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+4*singleShuamguanW-pt2.x)+pt2.y,singleShuamguanW,pt4.y-pt1.y));*/
 #ifdef SHOW_IMAGE
-		line(frame,Point2f(pt1.x+singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+singleShuamguanW-pt2.x)+pt2.y),Point2f(pt4.x+singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+singleShuamguanW-pt3.x)+pt3.y),Scalar(0,0,255),2);
+		/*line(frame,Point2f(pt1.x+singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+singleShuamguanW-pt2.x)+pt2.y),Point2f(pt4.x+singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+singleShuamguanW-pt3.x)+pt3.y),Scalar(0,0,255),2);
 		line(frame,Point2f(pt1.x+2*singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+2*singleShuamguanW-pt2.x)+pt2.y),Point2f(pt4.x+2*singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+2*singleShuamguanW-pt3.x)+pt3.y),Scalar(0,0,255),2);
 		line(frame,Point2f(pt1.x+3*singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+3*singleShuamguanW-pt2.x)+pt2.y),Point2f(pt4.x+3*singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+3*singleShuamguanW-pt3.x)+pt3.y),Scalar(0,0,255),2);
-		line(frame,Point2f(pt1.x+4*singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+4*singleShuamguanW-pt2.x)+pt2.y),Point2f(pt4.x+4*singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+4*singleShuamguanW-pt3.x)+pt3.y),Scalar(0,0,255),2);
+		line(frame,Point2f(pt1.x+4*singleShuamguanW,((pt2.y-pt1.y)/(pt2.x-pt1.x))*(pt1.x+4*singleShuamguanW-pt2.x)+pt2.y),Point2f(pt4.x+4*singleShuamguanW,((pt3.y-pt4.y)/(pt3.x-pt4.x))*(pt4.x+4*singleShuamguanW-pt3.x)+pt3.y),Scalar(0,0,255),2);*/
 #endif
 	}
 
@@ -378,6 +403,8 @@ bool ShenfuDetector::getLedRects(cv::Mat & frame){
 	Mat led_cells[5];
 
 	for(size_t i=0; i<5; i++){
+		if(led_rects[i].x<0 || led_rects[i].y<0 || led_rects[i].width<0 || led_rects[i].height<0 || led_rects[i].x + led_rects[i].width > frame.cols || led_rects[i].y + led_rects[i].height > frame.rows)
+				return false;
 		frame(led_rects[i]).copyTo(led_cells[i]);
 	}
 
@@ -385,17 +412,93 @@ bool ShenfuDetector::getLedRects(cv::Mat & frame){
 	
 #ifdef SHOW_IMAGE	
 	for(int i=0; i<5; i++){
+
+		rectangle(frame, led_rects[i], Scalar(0,0,255));
+
+		if(!led_cells[i].data){
+			cout << "The handwritten digit image isn't valid." << endl;
+			return -1;
+		}
+
+		Mat gray;
+		if(led_cells[i].channels() != 1)
+			cvtColor(led_cells[i], gray, CV_RGB2GRAY);
+		else
+			led_cells[i].copyTo(gray);	
+
+		medianBlur(gray, gray, 3);
+		int width, height;
+		width = gray.cols;
+		height = gray.rows;
+		Mat grayEx(Size(width+4, height+4), CV_8UC1, Scalar(0, 0, 0));
+		for (int i=2; i<height; i++){
+			for (int j=2; j<width+2; j++){
+				grayEx.at<uchar>(i,j) = gray.at<uchar>(i-2, j-2);
+			}
+		}
+
+		//Mat element = getStructuringElement(MORPH_RECT, Size(3, 3));
+		//dilate(grayEx, grayEx, element);
+		resize(grayEx, grayEx, Size(56, 112));
+		threshold(grayEx, grayEx, 150, 255, THRESH_BINARY);
+		
+		Mat gray_temp;
+		grayEx.copyTo(gray_temp);
+		vector<vector<Point>> contours;
+		findContours(gray_temp, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+		vector<Rect> mini_rects;
+		for(int i=0; i<contours.size(); i++){
+			Rect rc = boundingRect(contours[i]);
+			mini_rects.push_back(rc);
+		}
+		sort(mini_rects.begin(), mini_rects.end(), [](const Rect & r1, const Rect & r2){return r1.width*r1.height > r2.width*r2.height;});
+		
+		Mat led;
+		if(mini_rects.size() > 1){
+			if((double)(mini_rects[0].width*mini_rects[0].height)/(mini_rects[1].width*mini_rects[1].height)>2){
+				led = grayEx(mini_rects[0]);
+			}else{
+				/*vector<Point> twoGridPoints;
+				twoGridPoints.push_back(Point(mini_rects[0].x,mini_rects[0].y));
+				twoGridPoints.push_back(Point(mini_rects[0].x+mini_rects[0].width,mini_rects[0].y+mini_rects[0].height));
+				twoGridPoints.push_back(Point(mini_rects[1].x,mini_rects[1].y));
+				twoGridPoints.push_back(Point(mini_rects[1].x+mini_rects[1].width,mini_rects[1].y+mini_rects[1].height));
+				sort(twoGridPoints.begin(),twoGridPoints.end(),[](const Point & pt1, const Point & pt2){return pt1.y<pt2.y;});
+				Rect joint(twoGridPoints[0].x,twoGridPoints[0].y,mini_rects[3].x-twoGridPoints[0].x,mini_rects[3].y-twoGridPoints[0].y);
+				led = grayEx(joint);*/
+				grayEx.copyTo(led);			
+			}
+		}else if(mini_rects.size() == 1){
+			led = grayEx(mini_rects[0]);
+		}
+
+		Mat ledEx(Size(led.cols+10, led.rows+10), CV_8UC1, Scalar(0, 0, 0));
+		for(int i=5; i<led.rows+5; i++){
+			for(int j=5; j<led.cols+5; j++){
+				ledEx.at<uchar>(i, j) = led.at<uchar>(i-5, j-5);
+			}
+		}	
+
+		Mat led_img;
+		if (ledEx.rows!=112 || ledEx.cols!=56)
+			resize(ledEx,led_img,Size(56,112));
+		else
+			ledEx.copyTo(led_img);
+
+		threshold(led_img,led_img,150,255,THRESH_BINARY);
+		
 		stringstream stream3;
 		string str3;
 		stream3 << cur_led_results[i];
 		stream3 >> str3;
-		putText(led_cells[i],str3,Point(10,20),CV_FONT_HERSHEY_COMPLEX, 1,Scalar(0, 0, 0));
+		putText(led_img,str3,Point(10,20),CV_FONT_HERSHEY_COMPLEX, 1,Scalar(255, 255, 255));
+
 		stringstream stream4;
 		string str4;
 		stream4 << i+10;
 		stream4 >> str4;
 		namedWindow(str4,CV_WINDOW_NORMAL);		
-		imshow(str4, led_cells[i]);
+		imshow(str4, led_img);
 	}
 #endif
 	

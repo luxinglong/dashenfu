@@ -50,9 +50,9 @@ protected:
 	int findTargetEdge(cv::Mat * cells);
 	int findTargetCanny(cv::Mat * cells);
 	int findTargetCNN(cv::Mat * cells);
-	int findTargetDigit(cv::Mat * sudoku_cells, cv::Mat * led_cells);
+	int findTargetDigit(cv::Mat * sudoku_cells, cv::Mat & image);
 
-	bool init(cv::Mat * sudoku_cells, cv::Mat * led_cells);
+	bool init();
 	
 	int updateHitBit();
 	bool matchArray(const int * array1, const int * array2, int length);
@@ -68,7 +68,7 @@ protected:
 
 private:
 	std::vector<cv::RotatedRect> sudoku_rects;
-	std::vector<cv::Rect> led_rects;
+	std::vector<cv::Rect> ledd_rects;
 	cv::Point2f pt[2];
 	int last_sudoku_results[9];
 	int last_led_results[5];

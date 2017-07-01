@@ -1,13 +1,13 @@
 #pragma once
 
 #include "opencv2/opencv.hpp"
-#include <string>
+#include <utility>
 
 class TargetRecognition{
 public:
-	TargetRecognition(){}
+	TargetRecognition():SVM(){}
 
-	bool loadSVMModel(const string & model_path){
+	bool loadSVMModel(const char* model_path){
 		SVM.load(model_path);
 		return true;
 	}
@@ -20,5 +20,5 @@ protected:
 	bool match2array(const int* array1, const int* array2, int length);
 	
 private:
-	cv::CvSVM SVM;	
+	CvSVM SVM;	
 };
